@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Attendance Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --cyber-purple: #ff00ff;
+            --dark-bg: #0a0a1f;
+        }
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: var(--dark-bg);
+            color: #fff;
+        }
+        .cyber-header {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .neon-border {
+            box-shadow: 0 0 10px var(--neon-blue);
+            border: 1px solid var(--neon-blue);
+        }
+        .present {
+            background-color: rgba(0, 255, 0, 0.2);
+        }
+        .absent {
+            background-color: rgba(255, 0, 0, 0.2);
+        }
+        .cyber-button {
+            transition: all 0.3s ease;
+        }
+        .cyber-button:hover {
+            box-shadow: 0 0 20px var(--cyber-purple);
+            transform: translateY(-2px);
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 31, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+    <div class="loading" id="loadingScreen">
+        <div class="text-neon-blue text-xl">Processing...</div>
+    </div>
+
+    <nav class="flex justify-between items-center mb-8 neon-border p-4 rounded-lg">
+        <img src="https://firebasestorage.googleapis.com/v0/b/widecanvas-d0dd4.appspot.com/o/logos%2FWhatsApp%20Image%202025-02-06%20at%208.22.55%20PM.jpeg?alt=media&token=1741eb31-35e8-4105-97b4-017c97cc06cd" alt="Logo" class="h-12">
+        <h1 class="cyber-header text-2xl md:text-3xl text-neon-blue">CyberEdu Attendance</h1>
+    </nav>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Subjects Section -->
+        <div class="neon-border p-4 rounded-lg">
+            <h2 class="cyber-header text-xl mb-4">Subjects</h2>
+            <div id="subjectsList" class="space-y-4"></div>
+            <button onclick="addSubject()" class="cyber-button mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg w-full">Add Subject</button>
+        </div>
+
+        <!-- Timetable Section -->
+        <div class="neon-border p-4 rounded-lg">
+            <h2 class="cyber-header text-xl mb-4">Timetable</h2>
+            <div id="timetable" class="grid grid-cols-6 gap-2 text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Attendance Modal -->
+    <div id="attendanceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden">
+        <div class="bg-gray-900 p-6 rounded-lg w-11/12 md:w-2/3 mx-auto mt-20 neon-border">
+            <h3 class="cyber-header text-xl mb-4">Attendance - <span id="modalSubjectName"></span></h3>
+            <div id="studentsList" class="space-y-4 max-h-96 overflow-y-auto"></div>
+            <div class="flex justify-end mt-4 space-x-4">
+                <button onclick="closeAttendanceModal()" class="cyber-button bg-red-600 text-white px-4 py-2 rounded-lg">Close</button>
+                <button onclick="saveAttendance()" class="cyber-button bg-green-600 text-white px-4 py-2 rounded-lg">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let subjects = [];
+        let timetableData = Array(6).fill().map(() => Array(8).fill(''));
+        let currentSubject = null;
+
+        function showLoading() {
+            document.getElementById('loadingScreen').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }
+
+        function addSubject() {
+            const newSubject = {
+                name: `Subject ${subjects.length + 1}`,
+                teacher: 'Teacher Name',
+                students: [
+                    { name: 'Student 1', attendance: [] },
+                    { name: 'Student 2', attendance: [] }
+                ]
+            };
+            subjects.push(newSubject);
+            renderSubjects();
+        }
+
+        function renderSubjects() {
+            const subjectsList = document.getElementById('subjectsList');
+            subjectsList.innerHTML = subjects.map((subject, index) => `
+                <div class="neon-border p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <input type="text" value="${subject.name}" 
+                            onchange="updateSubject(${index}, 'name', this.value)"
+                            class="bg-gray-800 text-white px-2 py-1 rounded">
+                        <button onclick="showAttendance(${index})" 
+                            class="cyber-button bg-purple-600 text-white px-4 py-1 rounded-lg">
+                            Take Attendance
+                        </button>
+                    </div>
+                    <input type="text" value="${subject.teacher}" 
+                        onchange="updateSubject(${index}, 'teacher', this.value)"
+                        class="bg-gray-800 text-white px-2 py-1 rounded w-full mt-2"
+                        placeholder="Teacher Name">
+                </div>
+            `).join('');
+        }
+
+        function showAttendance(index) {
+            currentSubject = index;
+            document.getElementById('modalSubjectName').textContent = subjects[index].name;
+            renderStudentsList();
+            document.getElementById('attendanceModal').classList.remove('hidden');
+        }
+
+        function renderStudentsList() {
+            const studentsList = document.getElementById('studentsList');
+            studentsList.innerHTML = subjects[currentSubject].students.map((student, index) => `
+                <div class="flex items-center justify-between p-2 rounded ${student.attendance[student.attendance.length - 1] === 'present' ? 'present' : student.attendance[student.attendance.length - 1] === 'absent' ? 'absent' : ''}">
+                    <input type="text" value="${student.name}" 
+                        onchange="updateStudent(${index}, this.value)"
+                        class="bg-gray-800 text-white px-2 py-1 rounded flex-grow mr-4">
+                    <div class="space-x-2">
+                        <button onclick="markAttendance(${index}, 'present')" 
+                            class="cyber-button bg-green-600 text-white px-4 py-1 rounded-lg">Present</button>
+                        <button onclick="markAttendance(${index}, 'absent')" 
+                            class="cyber-button bg-red-600 text-white px-4 py-1 rounded-lg">Absent</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateSubject(index, field, value) {
+            subjects[index][field] = value;
+        }
+
+        function updateStudent(index, value) {
+            subjects[currentSubject].students[index].name = value;
+        }
+
+        function markAttendance(studentIndex, status) {
+            subjects[currentSubject].students[studentIndex].attendance.push(status);
+            renderStudentsList();
+        }
+
+        function closeAttendanceModal() {
+            document.getElementById('attendanceModal').classList.add('hidden');
+            currentSubject = null;
+        }
+
+        function saveAttendance() {
+            showLoading();
+            setTimeout(() => {
+                hideLoading();
+                closeAttendanceModal();
+            }, 1000);
+        }
+
+        // Initialize timetable
+        function initializeTimetable() {
+            const timetableEl = document.getElementById('timetable');
+            const days = ['Time', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+            const times = ['8:00', '9:00', '10:00', '11:00', '12:00', '1:00', '2:00', '3:00'];
+
+            // Header row
+            days.forEach(day => {
+                const cell = document.createElement('div');
+                cell.className = 'font-bold text-center p-2 bg-gray-800';
+                cell.textContent = day;
+                timetableEl.appendChild(cell);
+            });
+
+            // Time slots
+            times.forEach((time, i) => {
+                const timeCell = document.createElement('div');
+                timeCell.className = 'text-center p-2 bg-gray-800';
+                timeCell.textContent = time;
+                timetableEl.appendChild(timeCell);
+
+                // Slots for each day
+                for (let j = 0; j < 5; j++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'p-1';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'w-full bg-gray-800 text-white px-2 py-1 rounded text-sm';
+                    input.value = timetableData[j][i];
+                    input.onchange = (e) => updateTimetable(j, i, e.target.value);
+                    slot.appendChild(input);
+                    timetableEl.appendChild(slot);
+                }
+            });
+        }
+
+        function updateTimetable(day, time, value) {
+            timetableData[day][time] = value;
+        }
+
+        // Initialize the app
+        window.onload = () => {
+            addSubject();
+            initializeTimetable();
+        };
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
